@@ -1,0 +1,79 @@
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies
+node_modules
+vendor
+
+# Build artifacts
+public/build
+public/hot
+public/storage
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+tests
+.phpunit.result.cache
+phpunit.xml
+coverage
+
+# Documentation
+*.md
+!README.md
+docs
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Logs
+storage/logs/*.log
+npm-debug.log
+yarn-error.log
+
+# Cache
+storage/framework/cache/*
+!storage/framework/cache/.gitignore
+storage/framework/sessions/*
+!storage/framework/sessions/.gitignore
+storage/framework/views/*
+!storage/framework/views/.gitignore
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+
+# Docker files
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+.dockerignore
+
+# Development files
+.editorconfig
+.php-cs-fixer.php
+phpstan.neon
+pint.json
+
+# Package lock files (we copy them explicitly)
+package-lock.json
+
+# Temporary files
+*.tmp
+*.temp
