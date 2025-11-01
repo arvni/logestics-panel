@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'Logistics Panel'),
 
     /*
     |--------------------------------------------------------------------------
@@ -53,6 +53,32 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook Secret
+    |--------------------------------------------------------------------------
+    |
+    | This value is the secret key used to verify webhook signatures from
+    | external servers. The server must sign the webhook payload using
+    | HMAC-SHA256 and send the signature in the X-Webhook-Signature header.
+    |
+    */
+
+    'webhook_secret' => env('WEBHOOK_SECRET'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Server Webhook URL
+    |--------------------------------------------------------------------------
+    |
+    | This value is the external server endpoint URL where completed collect
+    | requests will be sent. The application will send a POST request with
+    | HMAC-SHA256 signature when a collect request is ended.
+    |
+    */
+
+    'server_webhook_url' => env('SERVER_WEBHOOK_URL'),
 
     /*
     |--------------------------------------------------------------------------

@@ -3,8 +3,14 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title inertia>{{ config('app.name', 'Laravel') }}</title>
+        <title inertia>{{ config('app.name', 'Logistics Panel') }}</title>
+
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="/build/manifest.webmanifest">
+        <meta name="theme-color" content="#1976d2">
+        <link rel="apple-touch-icon" href="/pwa-192x192.svg">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

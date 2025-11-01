@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php artisan make:model:*)",
+      "Bash(php artisan:*)",
+      "Bash(composer:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(timeout 5 bash:*)",
+      "Bash(node generate-icons.js:*)",
+      "Bash(node generate-icons.cjs:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

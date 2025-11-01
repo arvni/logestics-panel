@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate PWA Icons</title>
+</head>
+<body>
+    <h1>PWA Icon Generator</h1>
+    <p>Click the buttons below to generate and download PWA icons:</p>
+    <button onclick="generateIcon(192)">Generate 192x192 Icon</button>
+    <button onclick="generateIcon(512)">Generate 512x512 Icon</button>
+
+    <script>
+        function generateIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            // Background
+            ctx.fillStyle = '#1976d2';
+            ctx.fillRect(0, 0, size, size);
+
+            // Text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${size * 0.3}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('LP', size / 2, size / 2);
+
+            // Download
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pwa-${size}x${size}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+    </script>
+</body>
+</html>
