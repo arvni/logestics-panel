@@ -41,7 +41,6 @@ docs
 
 # CI/CD
 .github
-.gitlab-ci.yml
 .travis.yml
 
 # Logs
@@ -64,6 +63,8 @@ docker-compose.yml
 docker-compose.*.yml
 Dockerfile
 .dockerignore
+deploy.sh
+deploy.bat
 
 # Development files
 .editorconfig

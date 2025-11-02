@@ -1,4 +1,4 @@
-# Bion Logistics - DDD Architecture
+# Logistics Panel - DDD Architecture
 
 ## Overview
 This application follows Domain-Driven Design (DDD) principles with role-based access control for Admin and Operator users.

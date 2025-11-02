@@ -1,0 +1,291 @@
+# GitLab CI/CD Pipeline for Laravel + React (Inertia) Application
+# Requires GitLab Runner with Docker executor
+
+stages:
+  - prepare
+  - test
+  - build
+  - deploy
+
+variables:
+  # Docker configuration
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_IMAGE_NAME: $CI_REGISTRY_IMAGE
+  DOCKER_IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+
+  # MySQL service configuration for tests
+  MYSQL_ROOT_PASSWORD: root
+  MYSQL_DATABASE: logistics_panel_test
+  MYSQL_USER: test_user
+  MYSQL_PASSWORD: test_password
+  DB_HOST: mysql
+  DB_DATABASE: logistics_panel_test
+  DB_USERNAME: test_user
+  DB_PASSWORD: test_password
+
+# Cache composer and npm dependencies
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - vendor/
+    - node_modules/
+    - .npm/
+
+# Template for PHP jobs
+.php_template: &php_template
+  image: php:8.2-cli
+  before_script:
+    # Install system dependencies
+    - apt-get update -qq
+    - apt-get install -y -qq git curl libzip-dev unzip libpng-dev libonig-dev libxml2-dev
+    # Install PHP extensions
+    - docker-php-ext-install pdo_mysql mbstring zip bcmath gd
+    # Install Composer
+    - curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    # Install dependencies
+    - composer install --no-interaction --prefer-dist --optimize-autoloader
+
+# Template for Node jobs
+.node_template: &node_template
+  image: node:20-alpine
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+
+###################
+# PREPARE STAGE
+###################
+
+install:dependencies:
+  stage: prepare
+  <<: *php_template
+  script:
+    - composer install --no-interaction --prefer-dist --no-scripts
+    - echo "Dependencies installed successfully"
+  artifacts:
+    paths:
+      - vendor/
+    expire_in: 1 hour
+
+install:node:
+  stage: prepare
+  <<: *node_template
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - echo "Node dependencies installed successfully"
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+
+###################
+# TEST STAGE
+###################
+
+lint:php:
+  stage: test
+  <<: *php_template
+  dependencies:
+    - install:dependencies
+  script:
+    - ./vendor/bin/pint --test
+  allow_failure: true
+
+test:phpunit:
+  stage: test
+  <<: *php_template
+  services:
+    - mysql:8.0
+  dependencies:
+    - install:dependencies
+  variables:
+    DB_CONNECTION: mysql
+  script:
+    # Copy environment file
+    - cp .env.example .env
+    - php artisan key:generate
+    # Wait for MySQL to be ready
+    - |
+      until php artisan db:show 2>/dev/null; do
+        echo "Waiting for database connection..."
+        sleep 2
+      done
+    # Run migrations
+    - php artisan migrate --force
+    # Run tests
+    - php artisan test --parallel
+  coverage: '/^\s*Lines:\s*\d+.\d+\%/'
+  artifacts:
+    when: always
+    reports:
+      junit: storage/logs/junit.xml
+    paths:
+      - storage/logs/
+    expire_in: 1 week
+
+test:frontend:
+  stage: test
+  <<: *node_template
+  dependencies:
+    - install:node
+  script:
+    - npm run build
+    - echo "Frontend build successful"
+  artifacts:
+    paths:
+      - public/build/
+    expire_in: 1 hour
+
+###################
+# BUILD STAGE
+###################
+
+build:docker:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  before_script:
+    - docker info
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY
+  script:
+    # Build Docker image
+    - docker build -t $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG .
+    - docker tag $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG $DOCKER_IMAGE_NAME:latest
+
+    # Push to GitLab Container Registry
+    - docker push $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG
+    - docker push $DOCKER_IMAGE_NAME:latest
+
+    # Tag for branch
+    - |
+      if [ "$CI_COMMIT_BRANCH" == "main" ]; then
+        docker tag $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG $DOCKER_IMAGE_NAME:production
+        docker push $DOCKER_IMAGE_NAME:production
+      elif [ "$CI_COMMIT_BRANCH" == "develop" ]; then
+        docker tag $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG $DOCKER_IMAGE_NAME:staging
+        docker push $DOCKER_IMAGE_NAME:staging
+      fi
+
+    - echo "Docker image built and pushed successfully"
+  only:
+    - main
+    - develop
+    - tags
+  dependencies:
+    - test:phpunit
+    - test:frontend
+
+###################
+# DEPLOY STAGE
+###################
+
+deploy:staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $STAGING_SERVER >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh $STAGING_USER@$STAGING_SERVER << 'EOF'
+        # Pull latest image
+        docker pull $CI_REGISTRY_IMAGE:staging
+
+        # Stop and remove old container
+        docker stop bion-logistic-staging || true
+        docker rm bion-logistic-staging || true
+
+        # Run new container
+        docker run -d \
+          --name bion-logistic-staging \
+          --restart unless-stopped \
+          -p 8080:80 \
+          --env-file /home/$STAGING_USER/.env.staging \
+          $CI_REGISTRY_IMAGE:staging
+
+        # Run migrations
+        docker exec bion-logistic-staging php artisan migrate --force
+
+        # Clear caches
+        docker exec bion-logistic-staging php artisan config:cache
+        docker exec bion-logistic-staging php artisan route:cache
+        docker exec bion-logistic-staging php artisan view:cache
+
+        # Cleanup old images
+        docker image prune -f
+      EOF
+    - echo "Deployed to staging server successfully"
+  environment:
+    name: staging
+    url: https://staging.yourdomain.com
+  only:
+    - develop
+  when: manual
+
+deploy:production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $PRODUCTION_SERVER >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh $PRODUCTION_USER@$PRODUCTION_SERVER << 'EOF'
+        # Pull latest image
+        docker pull $CI_REGISTRY_IMAGE:production
+
+        # Stop and remove old container
+        docker stop bion-logistic-prod || true
+        docker rm bion-logistic-prod || true
+
+        # Run new container
+        docker run -d \
+          --name bion-logistic-prod \
+          --restart unless-stopped \
+          -p 80:80 \
+          --env-file /home/$PRODUCTION_USER/.env.production \
+          $CI_REGISTRY_IMAGE:production
+
+        # Run migrations
+        docker exec bion-logistic-prod php artisan migrate --force
+
+        # Clear and optimize caches
+        docker exec bion-logistic-prod php artisan config:cache
+        docker exec bion-logistic-prod php artisan route:cache
+        docker exec bion-logistic-prod php artisan view:cache
+        docker exec bion-logistic-prod php artisan optimize
+
+        # Cleanup old images
+        docker image prune -f
+      EOF
+    - echo "Deployed to production server successfully"
+  environment:
+    name: production
+    url: https://yourdomain.com
+  only:
+    - main
+    - tags
+  when: manual
+
+###################
+# CLEANUP
+###################
+
+cleanup:registry:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "Cleaning up old container images..."
+    - echo "This should be configured in GitLab Container Registry settings"
+  only:
+    - schedules
+  when: manual

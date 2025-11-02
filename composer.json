@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "logistics-panel/logistics-panel",
+    "name": "ariz/logistics-panel",
     "type": "project",
     "description": "Logistics Panel - Biological sample collection management system with temperature monitoring and GPS tracking.",
     "keywords": ["laravel", "logistics", "temperature-monitoring", "gps-tracking", "sample-collection"],
