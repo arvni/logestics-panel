@@ -16,53 +16,105 @@ class WebhookController extends Controller
     /**
      * Handle incoming logistics request webhook
      *
-     * Expects user_id and referrer_id as server_ids from external system
+     * Expects sample_collector and referrer with their server IDs
      * Maps them to local User and Referrer records and creates a CollectRequest
      */
     public function handleLogisticsRequest(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'id' => 'required',
-            'sample_collector_id' => 'required|string',
-            'referrer_id' => 'required|string',
-            'extra_information' => 'nullable|array',
+            'id' => 'required|integer',
+            'action' => 'required|string|in:create,update,delete',
+            'status' => 'required|string|in:pending,in_progress,completed,cancelled',
+            'sample_collector' => 'required|array',
+            'sample_collector.id' => 'required|integer',
+            'sample_collector.name' => 'required|string',
+            'sample_collector.email' => 'required|email',
+            'referrer' => 'required|array',
+            'referrer.id' => 'required|integer',
+            'referrer.name' => 'required|string',
+            'referrer.email' => 'required|email',
+            'referrer.phone' => 'nullable|string',
+            'logistic_information' => 'nullable|array',
+            'created_at' => 'nullable|string',
+            'updated_at' => 'nullable|string',
         ]);
 
-        // Find user by server_id
-        $user = User::where('server_id', $validated['sample_collector_id'])->first();
+        // Find or create sample collector (user) by server_id
+        $user = User::where('server_id', $validated['sample_collector']['id'])->first();
         if (!$user) {
-            return response()->json([
-                'error' => 'User not found',
-                'message' => "No user found with server_id: {$validated['sample_collector_id']}"
-            ], 404);
+            // Auto-create user if not exists
+            $user = User::create([
+                'server_id' => $validated['sample_collector']['id'],
+                'name' => $validated['sample_collector']['name'],
+                'email' => $validated['sample_collector']['email'],
+                'password' => Str::random(32), // Random password, user must reset to login
+                'role' => 'operator', // Default role for sample collectors
+            ]);
         }
 
-        // Find referrer by server_id
-        $referrer = Referrer::where('server_id', $validated['referrer_id'])->first();
+        // Find or create referrer by server_id
+        $referrer = Referrer::where('server_id', $validated['referrer']['id'])->first();
         if (!$referrer) {
-            return response()->json([
-                'error' => 'Referrer not found',
-                'message' => "No referrer found with server_id: {$validated['referrer_id']}"
-            ], 404);
+            // Auto-create referrer if not exists
+            $referrer = Referrer::create([
+                'server_id' => $validated['referrer']['id'],
+                'name' => $validated['referrer']['name'],
+            ]);
         }
 
-        // Create collect request with mapped local IDs
-        $collectRequest = CollectRequest::create([
-            'user_id' => $user->id,
-            'referrer_id' => $referrer->id,
-            'server_id' => $validated['id'] ?? null,
-            'extra_information' => $validated['extra_information'] ?? null,
-        ]);
+        // Check if collect request already exists based on server_id
+        $collectRequest = CollectRequest::where('server_id', $validated['id'])->first();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Collect request created successfully',
-            'data' => [
-                'collect_request_id' => $collectRequest->id,
+        if ($validated['action'] === 'create' && !$collectRequest) {
+            // Create new collect request
+            $collectRequest = CollectRequest::create([
                 'user_id' => $user->id,
                 'referrer_id' => $referrer->id,
-            ]
-        ], 204);
+                'server_id' => $validated['id'],
+                'status' => $validated['status'],
+                'extra_information' => $validated['logistic_information'] ?? null,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Collect request created successfully',
+                'data' => [
+                    'collect_request_id' => $collectRequest->id,
+                    'server_id' => $collectRequest->server_id,
+                    'user_id' => $user->id,
+                    'referrer_id' => $referrer->id,
+                    'status' => $collectRequest->status,
+                ]
+            ], 201);
+        } elseif ($validated['action'] === 'update' && $collectRequest) {
+            // Update existing collect request
+            $collectRequest->update([
+                'status' => $validated['status'],
+                'extra_information' => $validated['logistic_information'] ?? $collectRequest->extra_information,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Collect request updated successfully',
+                'data' => [
+                    'collect_request_id' => $collectRequest->id,
+                    'server_id' => $collectRequest->server_id,
+                    'status' => $collectRequest->status,
+                ]
+            ], 200);
+        } elseif ($validated['action'] === 'delete' && $collectRequest) {
+            $collectRequest->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Collect request cancelled successfully',
+            ], 204);
+        } else {
+            return response()->json([
+                'error' => 'Invalid action or request state',
+                'message' => "Cannot perform action '{$validated['action']}' on collect request with server_id: {$validated['id']}"
+            ], 400);
+        }
     }
 
     /**

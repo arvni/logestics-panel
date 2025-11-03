@@ -1,6 +1,6 @@
 import {useState, useEffect} from 'react';
 import MuiAuthenticatedLayout from '@/Layouts/MuiAuthenticatedLayout';
-import {Head} from '@inertiajs/react';
+import {Head, usePage} from '@inertiajs/react';
 import {
     Box,
     Container,
@@ -41,6 +41,42 @@ export default function Index({auth}) {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+    // Helper function to get CSRF token from meta tag
+    const getCsrfToken = () => {
+        const token = document.head.querySelector('meta[name="csrf-token"]');
+        return token ? token.content : null;
+    };
+
+    // Helper function to fetch fresh CSRF token from server
+    const fetchFreshCsrfToken = async () => {
+        try {
+            const response = await axios.get('/csrf-token');
+            const newToken = response.data.csrf_token;
+
+            // Update meta tag
+            const metaTag = document.head.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                metaTag.content = newToken;
+            }
+
+            // Update axios default
+            axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+
+            return newToken;
+        } catch (error) {
+            console.error('Failed to fetch CSRF token:', error);
+            return getCsrfToken();
+        }
+    };
+
+    // Helper function to ensure CSRF token is set in axios
+    const ensureCsrfToken = () => {
+        const token = getCsrfToken();
+        if (token) {
+            axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        }
+    };
 
     const [collectRequests, setCollectRequests] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -165,6 +201,9 @@ export default function Index({auth}) {
         }
 
         try {
+            // Fetch fresh CSRF token before making the request
+            const freshToken = await fetchFreshCsrfToken();
+
             const location = await getUserLocation();
 
             const payload = {
@@ -176,13 +215,19 @@ export default function Index({auth}) {
                 payload.starting_location = location;
             }
 
-            await axios.post('/api/operator/collect-requests/start', payload);
+            await axios.post('/api/operator/collect-requests/start', payload, {
+                headers: {
+                    'X-CSRF-TOKEN': freshToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
 
             handleCloseStartDialog();
             fetchCollectRequests();
         } catch (error) {
             console.error('Error starting collection:', error);
-            alert(error.response?.data?.message || 'Failed to start collection');
+            const errorMsg = error.response?.data?.message || error.message || 'Failed to start collection';
+            alert(errorMsg);
         }
     };
 
@@ -205,6 +250,9 @@ export default function Index({auth}) {
         }
 
         try {
+            // Fetch fresh CSRF token before making the request
+            const freshToken = await fetchFreshCsrfToken();
+
             const location = await getUserLocation();
 
             const formData = new FormData();
@@ -224,6 +272,8 @@ export default function Index({auth}) {
             await axios.post('/api/operator/collect-requests/end', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
+                    'X-CSRF-TOKEN': freshToken,
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
 
@@ -233,7 +283,8 @@ export default function Index({auth}) {
             fetchCollectRequests();
         } catch (error) {
             console.error('Error ending collection:', error);
-            alert(error.response?.data?.message || 'Failed to end collection');
+            const errorMsg = error.response?.data?.message || error.message || 'Failed to end collection';
+            alert(errorMsg);
         }
     };
 

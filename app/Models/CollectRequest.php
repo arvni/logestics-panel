@@ -14,6 +14,7 @@ class CollectRequest extends Model
         'referrer_id',
         'server_id',
         'device_id',
+        'status',
         'started_at',
         'ended_at',
         'barcodes',

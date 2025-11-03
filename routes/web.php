@@ -28,6 +28,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
+    // CSRF token endpoint for PWA
+    Route::get('/csrf-token', function () {
+        return response()->json(['csrf_token' => csrf_token()]);
+    })->name('csrf.token');
+
     // Admin routes
     Route::middleware(['role:admin'])->prefix('admin')->group(function () {
         Route::get('/users', function () {
