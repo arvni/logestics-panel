@@ -504,10 +504,6 @@ This project is licensed under the MIT License.
 - React Community
 - All contributors and users
 
-## 📞 Support
-
-For support, email support@example.com or create an issue in the repository.
-
 ## 🗺️ Roadmap
 
 - [ ] Real-time notifications
