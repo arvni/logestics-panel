@@ -9,9 +9,41 @@ import { theme } from './theme';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Logistics Panel';
 
-// Register Service Worker for PWA
+// Force clear old service workers and caches - VERSION 1.0.1
+// This will run once to clear old cached API responses
+const APP_VERSION = '1.0.1';
+const VERSION_KEY = 'app_version';
+
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    window.addEventListener('load', async () => {
+        const currentVersion = localStorage.getItem(VERSION_KEY);
+
+        // Force clear if version changed
+        if (currentVersion !== APP_VERSION) {
+            console.log('Version changed, clearing caches...');
+
+            // Unregister all old service workers
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (const registration of registrations) {
+                await registration.unregister();
+            }
+
+            // Clear all caches
+            const cacheNames = await caches.keys();
+            for (const cacheName of cacheNames) {
+                await caches.delete(cacheName);
+            }
+
+            // Update version
+            localStorage.setItem(VERSION_KEY, APP_VERSION);
+            console.log('Caches cleared, reloading...');
+
+            // Reload to ensure fresh content
+            window.location.reload(true);
+            return;
+        }
+
+        // Register new service worker
         const swPath = import.meta.env.PROD ? '/build/sw.js' : '/sw.js';
 
         navigator.serviceWorker.register(swPath, { scope: '/' })
@@ -23,8 +55,9 @@ if ('serviceWorker' in navigator) {
                     const newWorker = registration.installing;
                     newWorker.addEventListener('statechange', () => {
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            if (confirm('New content available. Reload?')) {
+                            if (confirm('New version available. Reload to update?')) {
                                 newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                localStorage.removeItem(VERSION_KEY); // Force cache clear on next load
                                 window.location.reload();
                             }
                         }

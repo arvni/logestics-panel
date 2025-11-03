@@ -22,6 +22,7 @@ export default defineConfig({
                 name: 'Logistics Panel - Sample Collection Management',
                 short_name: 'Logistics',
                 description: 'Biological sample collection management system with GPS tracking and temperature monitoring',
+                version: '1.0.1',
                 start_url: '/',
                 scope: '/',
                 theme_color: '#1976d2',
@@ -73,17 +74,17 @@ export default defineConfig({
                         },
                     },
                     {
+                        // Never cache API routes - always use network only to ensure CSRF tokens work
+                        urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+                        handler: 'NetworkOnly',
+                    },
+                    {
                         urlPattern: /^https:\/\/api\./,
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'api-cache',
-                            expiration: {
-                                maxEntries: 50,
-                                maxAgeSeconds: 300,
-                            },
-                        },
+                        handler: 'NetworkOnly',
                     },
                 ],
+                // Don't cache anything that contains these patterns
+                navigateFallbackDenylist: [/^\/api\//],
             },
         }),
     ],
