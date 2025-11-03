@@ -3,15 +3,13 @@
 namespace App\Application\Operator;
 
 use App\Domain\CollectRequest\CollectRequestRepositoryInterface;
-use App\Events\CollectRequestEnded;
+use App\Events\CollectRequestUpdated;
 use App\Models\CollectRequest;
 use App\Models\Device;
 use App\Models\TemperatureLog;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Reader\Csv;
 
 class CollectRequestOperationService
@@ -137,7 +135,12 @@ class CollectRequestOperationService
             $updateData['extra_information'] = $extraInfo;
         }
 
-        return $this->collectRequestRepository->update($requestId, $updateData);
+        $updatedRequest = $this->collectRequestRepository->update($requestId, $updateData);
+
+        // Dispatch event to notify external server about the start (single request)
+        event(new CollectRequestUpdated([$requestId], 'started'));
+
+        return $updatedRequest;
     }
 
     public function endCollections(int $userId, array $requestIds, $uploadedFile, ?array $endingLocation = null): array
@@ -200,8 +203,8 @@ class CollectRequestOperationService
                 }
             }
 
-            // Dispatch event to notify external server
-            event(new CollectRequestEnded($requestIds));
+            // Dispatch event to notify external server about the end (multiple requests)
+            event(new CollectRequestUpdated($requestIds, 'ended'));
 
             // Update each collect request individually to add ending location
             foreach ($requestIds as $requestId) {

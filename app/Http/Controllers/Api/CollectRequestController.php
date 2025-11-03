@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Events\CollectRequestEnded;
+use App\Events\CollectRequestUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\CollectRequest;
 use App\Models\Device;
@@ -119,7 +119,7 @@ class CollectRequestController extends Controller
                 ]);
 
                 // Dispatch event to notify external server
-                event(new CollectRequestEnded($validated['collect_request_ids']));
+                event(new CollectRequestUpdated($validated['collect_request_ids'], 'ended'));
             }
 
             DB::commit();

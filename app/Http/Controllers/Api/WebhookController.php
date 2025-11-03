@@ -203,4 +203,104 @@ class WebhookController extends Controller
             ]
         ], $wasCreated ? 201 : 200);
     }
+
+    /**
+     * Handle collect request updates webhook (started/ended actions)
+     *
+     * Receives notifications when collect requests are started or ended
+     * Supports multiple collect requests in a single webhook call
+     *
+     * Expected payload:
+     * {
+     *   "action": "started" | "ended",
+     *   "collect_requests": [
+     *     {
+     *       "id": <server_id>,
+     *       "sample_collector_id": <server_id>,
+     *       "referrer_id": <server_id>,
+     *       "device_mac": "...",
+     *       "started_at": "2025-11-03T10:30:00Z",
+     *       "ended_at": "2025-11-03T12:45:00Z",
+     *       "barcodes": ["..."],
+     *       "extra_information": {...}
+     *     }
+     *   ]
+     * }
+     */
+    public function handleCollectRequestUpdate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'action' => 'required|string|in:started,ended',
+            'collect_requests' => 'required|array|min:1',
+            'collect_requests.*.id' => 'required|integer',
+            'collect_requests.*.sample_collector_id' => 'required|integer',
+            'collect_requests.*.referrer_id' => 'required|integer',
+            'collect_requests.*.device_mac' => 'nullable|string',
+            'collect_requests.*.started_at' => 'nullable|string',
+            'collect_requests.*.ended_at' => 'nullable|string',
+            'collect_requests.*.barcodes' => 'nullable|array',
+            'collect_requests.*.extra_information' => 'nullable|array',
+        ]);
+
+        $action = $validated['action'];
+        $results = [];
+
+        foreach ($validated['collect_requests'] as $collectRequestData) {
+            // Find the collect request by server_id
+            $collectRequest = CollectRequest::where('server_id', $collectRequestData['id'])->first();
+
+            if (!$collectRequest) {
+                $results[] = [
+                    'server_id' => $collectRequestData['id'],
+                    'success' => false,
+                    'message' => 'Collect request not found',
+                ];
+                continue;
+            }
+
+            // Update based on action
+            if ($action === 'started') {
+                $collectRequest->update([
+                    'started_at' => $collectRequestData['started_at'] ? \Carbon\Carbon::parse($collectRequestData['started_at']) : null,
+                    'barcodes' => $collectRequestData['barcodes'] ?? $collectRequest->barcodes,
+                    'extra_information' => $collectRequestData['extra_information'] ?? $collectRequest->extra_information,
+                    'status' => 'in_progress',
+                ]);
+
+                $results[] = [
+                    'server_id' => $collectRequestData['id'],
+                    'local_id' => $collectRequest->id,
+                    'success' => true,
+                    'message' => 'Collect request marked as started',
+                ];
+            } elseif ($action === 'ended') {
+                $updateData = [
+                    'ended_at' => $collectRequestData['ended_at'] ? \Carbon\Carbon::parse($collectRequestData['ended_at']) : now(),
+                    'extra_information' => $collectRequestData['extra_information'] ?? $collectRequest->extra_information,
+                    'status' => 'completed',
+                ];
+
+                // Update device if MAC address is provided
+                if (!empty($collectRequestData['device_mac'])) {
+                    $device = \App\Models\Device::firstOrCreate(['mac' => $collectRequestData['device_mac']]);
+                    $updateData['device_id'] = $device->id;
+                }
+
+                $collectRequest->update($updateData);
+
+                $results[] = [
+                    'server_id' => $collectRequestData['id'],
+                    'local_id' => $collectRequest->id,
+                    'success' => true,
+                    'message' => 'Collect request marked as ended',
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Processed {$action} action for " . count($validated['collect_requests']) . ' collect request(s)',
+            'results' => $results,
+        ], 200);
+    }
 }

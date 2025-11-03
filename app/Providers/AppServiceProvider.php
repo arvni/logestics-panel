@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use App\Events\CollectRequestEnded;
-use App\Listeners\SendCollectRequestToServer;
+use App\Events\CollectRequestUpdated;
+use App\Listeners\NotifyServerOfCollectRequestUpdate;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
@@ -31,8 +31,8 @@ class AppServiceProvider extends ServiceProvider
 
         // Register event listeners
         Event::listen(
-            CollectRequestEnded::class,
-            SendCollectRequestToServer::class,
+            CollectRequestUpdated::class,
+            NotifyServerOfCollectRequestUpdate::class,
         );
     }
 }
