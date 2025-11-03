@@ -1,14 +1,18 @@
 # Multi-stage build for Laravel + React (Inertia) Application
 # Stage 1: Build frontend assets with Node.js
-FROM node:20-alpine AS node-builder
+FROM node:20-slim AS node-builder
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json package-lock.json ./
 
-# Install dependencies
-RUN npm ci --only=production=false
+# Install dependencies (including devDependencies for build)
+# Clean install to ensure all optional dependencies are installed
+RUN npm clean-install
+
+# Explicitly install rollup's native bindings for linux-x64-gnu
+RUN npm install --no-save @rollup/rollup-linux-x64-gnu
 
 # Copy application files needed for build
 COPY resources ./resources

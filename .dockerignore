@@ -6,6 +6,7 @@
 # Dependencies
 node_modules
 vendor
+.claude
 
 # Build artifacts
 public/build
@@ -71,9 +72,6 @@ deploy.bat
 .php-cs-fixer.php
 phpstan.neon
 pint.json
-
-# Package lock files (we copy them explicitly)
-package-lock.json
 
 # Temporary files
 *.tmp

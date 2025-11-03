@@ -11,7 +11,8 @@
       "Bash(timeout 5 bash:*)",
       "Bash(node generate-icons.js:*)",
       "Bash(node generate-icons.cjs:*)",
-      "Bash(php --version:*)"
+      "Bash(php --version:*)",
+      "Bash(docker build:*)"
     ],
     "deny": [],
     "ask": []
