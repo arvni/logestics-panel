@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CollectRequest extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'user_id',
         'referrer_id',

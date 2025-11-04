@@ -125,7 +125,6 @@ class CollectRequestOperationService
         }
 
         $updateData = [
-            'server_id' => $data['server_id'] ?? null,
             'barcodes' => array_merge($request->barcodes ?? [], $data['barcodes'] ?? []),
             'started_at' => now(),
         ];
