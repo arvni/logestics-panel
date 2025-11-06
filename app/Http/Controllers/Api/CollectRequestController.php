@@ -154,17 +154,6 @@ class CollectRequestController extends Controller
             ->collectRequests()
             ->with(['device', 'referrer'])
             ->findOrFail($id);
-
-        // If the collect request has ended, get temperature logs within the time range
-        if ($collectRequest->ended_at && $collectRequest->device_id) {
-            $temperatureLogs = TemperatureLog::where('device_id', $collectRequest->device_id)
-                ->whereBetween('timestamp', [$collectRequest->started_at, $collectRequest->ended_at])
-                ->orderBy('timestamp', 'asc')
-                ->get();
-
-            $collectRequest->temperature_logs = $temperatureLogs;
-        }
-
         return response()->json($collectRequest);
     }
 

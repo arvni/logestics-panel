@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CollectRequest;
+use App\Models\Device;
 use App\Models\Referrer;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -24,7 +26,7 @@ class WebhookController extends Controller
         $validated = $request->validate([
             'id' => 'required|integer',
             'action' => 'required|string|in:create,update,delete',
-            'status' => 'required|string|in:pending,in_progress,completed,cancelled',
+            'status' => 'nullable|string',
             'sample_collector' => 'required|array',
             'sample_collector.id' => 'required|integer',
             'sample_collector.name' => 'required|string',
@@ -34,6 +36,9 @@ class WebhookController extends Controller
             'referrer.name' => 'required|string',
             'referrer.email' => 'required|email',
             'referrer.phone' => 'nullable|string',
+            'referrer.address' => 'nullable|string',
+            'referrer.longitude' => 'nullable',
+            'referrer.latitude' => 'nullable',
             'logistic_information' => 'nullable|array',
             'created_at' => 'nullable|string',
             'updated_at' => 'nullable|string',
@@ -59,13 +64,16 @@ class WebhookController extends Controller
             $referrer = Referrer::create([
                 'server_id' => $validated['referrer']['id'],
                 'name' => $validated['referrer']['name'],
+                'address' => $validated['referrer']['address'] ?? "",
+                'longitude' => $validated['referrer']['longitude'] ?? "",
+                'latitude' => $validated['referrer']['latitude'] ?? "",
             ]);
         }
 
         // Check if collect request already exists based on server_id
         $collectRequest = CollectRequest::where('server_id', $validated['id'])->first();
 
-        if ($validated['action'] === 'create' && !$collectRequest) {
+        if (($validated['action'] === 'create' || $validated['action'] === 'update') && !$collectRequest) {
             // Create new collect request
             $collectRequest = CollectRequest::create([
                 'user_id' => $user->id,
@@ -261,7 +269,7 @@ class WebhookController extends Controller
             // Update based on action
             if ($action === 'started') {
                 $collectRequest->update([
-                    'started_at' => $collectRequestData['started_at'] ? \Carbon\Carbon::parse($collectRequestData['started_at']) : null,
+                    'started_at' => $collectRequestData['started_at'] ? Carbon::parse($collectRequestData['started_at']) : null,
                     'barcodes' => $collectRequestData['barcodes'] ?? $collectRequest->barcodes,
                     'extra_information' => $collectRequestData['extra_information'] ?? $collectRequest->extra_information,
                     'status' => 'in_progress',
@@ -275,14 +283,14 @@ class WebhookController extends Controller
                 ];
             } elseif ($action === 'ended') {
                 $updateData = [
-                    'ended_at' => $collectRequestData['ended_at'] ? \Carbon\Carbon::parse($collectRequestData['ended_at']) : now(),
+                    'ended_at' => $collectRequestData['ended_at'] ? Carbon::parse($collectRequestData['ended_at']) : now(),
                     'extra_information' => $collectRequestData['extra_information'] ?? $collectRequest->extra_information,
                     'status' => 'completed',
                 ];
 
                 // Update device if MAC address is provided
                 if (!empty($collectRequestData['device_mac'])) {
-                    $device = \App\Models\Device::firstOrCreate(['mac' => $collectRequestData['device_mac']]);
+                    $device = Device::firstOrCreate(['mac' => $collectRequestData['device_mac']]);
                     $updateData['device_id'] = $device->id;
                 }
 

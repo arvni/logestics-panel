@@ -51,7 +51,7 @@ class NotifyServerOfCollectRequestUpdate implements ShouldQueue
 
         // Prepare collect requests data
         $collectRequestsData = $collectRequests->map(function ($collectRequest) {
-            return [
+            $data = [
                 'id' => $collectRequest->server_id,
                 'sample_collector_id' => $collectRequest->user->server_id,
                 'referrer_id' => $collectRequest->referrer->server_id,
@@ -61,9 +61,8 @@ class NotifyServerOfCollectRequestUpdate implements ShouldQueue
                 'ended_at' => $collectRequest->ended_at?->toIso8601String(),
                 'barcodes' => $collectRequest->barcodes,
                 'extra_information' => $collectRequest->extra_information,
-                'temperature_logs' => $collectRequest->device->temreatureLogs
-                    ->whereBetween("timestamp", [$collectRequest->started_at, $collectRequest->ended_at]),
             ];
+            return $data;
         })->toArray();
 
         try {

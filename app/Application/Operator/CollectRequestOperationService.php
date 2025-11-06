@@ -7,10 +7,14 @@ use App\Events\CollectRequestUpdated;
 use App\Models\CollectRequest;
 use App\Models\Device;
 use App\Models\TemperatureLog;
+use DateTime;
+use DateTimeZone;
+use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Reader\Csv;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 class CollectRequestOperationService
 {
@@ -100,15 +104,15 @@ class CollectRequestOperationService
         $request = $this->collectRequestRepository->findById($requestId);
 
         if (!$request) {
-            throw new \Exception('Collect request not found');
+            throw new Exception('Collect request not found');
         }
 
         if ($request->user_id !== $userId) {
-            throw new \Exception('This request is not assigned to you');
+            throw new Exception('This request is not assigned to you');
         }
 
         if ($request->started_at) {
-            throw new \Exception('This request has already been started');
+            throw new Exception('This request has already been started');
         }
 
         // Prepare extra information - start with existing data or empty array
@@ -173,7 +177,7 @@ class CollectRequestOperationService
 
             // Validate MAC address format
             if (!preg_match('/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/', $macAddress)) {
-                throw new \Exception('MAC address not found in cell D1');
+                throw new Exception('MAC address not found in cell D1');
             }
 
             // Find or create device
@@ -189,15 +193,14 @@ class CollectRequestOperationService
                 if ($datetime && $value !== null && $value !== '') {
                     // Convert Excel date to PHP DateTime if needed
                     if (is_numeric($datetime)) {
-                        $datetime = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($datetime);
+                        $datetime = Date::excelToDateTimeObject($datetime);
                     } else {
-                        $datetime = new \DateTime($datetime);
+                        $datetime = new DateTime($datetime,new DateTimeZone("Asia/Muscat"));
                     }
-
                     TemperatureLog::create([
                         'device_id' => $device->id,
                         'value' => $value,
-                        'timestamp' => $datetime,
+                        'timestamp' => $datetime->getTimestamp(),
                     ]);
                 }
             }
@@ -205,7 +208,7 @@ class CollectRequestOperationService
             // Dispatch event to notify external server about the end (multiple requests)
             event(new CollectRequestUpdated($requestIds, 'ended'));
 
-            // Update each collect request individually to add ending location
+            // Update each collect request individually to add ending location and temperature logs
             foreach ($requestIds as $requestId) {
                 $request = $this->collectRequestRepository->findById($requestId);
 
@@ -219,19 +222,38 @@ class CollectRequestOperationService
                     'ended_at' => now(),
                 ];
 
+                // Prepare extra_information
+                $extraInfo = is_array($request->extra_information) ? $request->extra_information : [];
+
                 // Add ending location to extra_information if provided
                 if ($endingLocation && is_array($endingLocation)) {
-                    $extraInfo = is_array($request->extra_information) ? $request->extra_information : [];
-
                     $extraInfo['ending_location'] = [
                         'latitude' => $endingLocation['latitude'],
                         'longitude' => $endingLocation['longitude'],
                         'accuracy' => $endingLocation['accuracy'] ?? null,
                         'timestamp' => now()->toDateTimeString(),
                     ];
-
-                    $updateData['extra_information'] = $extraInfo;
                 }
+
+                // Get temperature logs for this collect request (between started_at and ended_at)
+                if ($request->started_at && $device->id) {
+                    $temperatureLogs = TemperatureLog::where('device_id', $device->id)
+                        ->whereBetween('timestamp', [$request->started_at, now()])
+                        ->orderBy('timestamp', 'asc')
+                        ->get()
+                        ->map(function ($log) {
+                            return [
+                                'value' => $log->value,
+                                'timestamp' => $log->timestamp->toIso8601String(),
+                            ];
+                        })
+                        ->toArray();
+
+                    // Add temperature logs to extra_information
+                    $extraInfo['temperature_logs'] = $temperatureLogs;
+                }
+
+                $updateData['extra_information'] = $extraInfo;
 
                 $this->collectRequestRepository->update($requestId, $updateData);
             }
@@ -244,7 +266,7 @@ class CollectRequestOperationService
                 'temperature_logs_count' => $highestRow - 1,
             ];
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             DB::rollBack();
 
             // Delete uploaded file if transaction failed

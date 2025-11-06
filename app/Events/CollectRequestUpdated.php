@@ -28,12 +28,14 @@ class CollectRequestUpdated
      * @param string $action The action performed: 'started' or 'ended'
      */
     public function __construct(
-        array $collectRequestsId,
+        array  $collectRequestsId,
         string $action = 'ended'
     )
     {
         // Load relationships to ensure they're available in the listener
-        $this->collectRequests = CollectRequest::whereIn('id', $collectRequestsId)->with(['user', 'referrer', 'device.temperatureLogs'])->get();
+        $this->collectRequests = CollectRequest::whereIn('id', $collectRequestsId)
+            ->with(['user', 'referrer', 'device'])
+            ->get();
         $this->action = $action;
     }
 }
