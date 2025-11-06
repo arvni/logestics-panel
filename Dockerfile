@@ -1,123 +1,154 @@
-# Multi-stage build for Laravel + React (Inertia) Application
-# Stage 1: Build frontend assets with Node.js
-FROM node:20-slim AS node-builder
+# Stage 1: Build the application
+FROM php:8.2-alpine as builder
 
-WORKDIR /app
+# Set environment variables for build stage
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    PHP_MEMORY_LIMIT=256M \
+    UPLOAD_MAX_FILESIZE=128M \
+    POST_MAX_SIZE=128M \
+    PSYSH_HISTORY_FILE=/dev/null \
+    PSYSH_CONFIG_FILE=/dev/null \
+    PSYSH_MANUAL_DB_FILE=/dev/null
 
-# Copy package files
-COPY package*.json package-lock.json ./
+# Install necessary packages and PHP extensions
+RUN apk --no-cache add \
+        libmemcached-libs \
+        zlib \
+        libzip-dev \
+        libpng-dev \
+        libsodium \
+        libsodium-dev \
+        jpeg-dev \
+        freetype-dev \
+        libwebp-dev \
+        curl \
+        icu \
+        icu-dev \
+        g++ \
+        make \
+        oniguruma-dev \
+        linux-headers \
+        libxml2-dev \
+        bash \
+        git \
+        nodejs \
+        npm \
+        postgresql-dev \
+        libpq \
+        $PHPIZE_DEPS && \
+    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp && \
+    docker-php-ext-install -j$(nproc) \
+        mysqli \
+        pdo_mysql \
+        pdo_pgsql \
+        pgsql \
+        sodium \
+        zip \
+        gd \
+        intl \
+        bcmath \
+        opcache \
+        exif \
+        pcntl && \
+    pecl install redis && \
+    docker-php-ext-enable redis opcache
 
-# Install dependencies (including devDependencies for build)
-# Clean install to ensure all optional dependencies are installed
-RUN npm clean-install
-
-# Explicitly install rollup's native bindings for linux-x64-gnu
-RUN npm install --no-save @rollup/rollup-linux-x64-gnu
-
-# Copy application files needed for build
-COPY resources ./resources
-COPY public ./public
-COPY vite.config.js ./
-COPY postcss.config.js* ./
-COPY tailwind.config.js* ./
-
-# Build frontend assets
-RUN npm run build
-
-# Stage 2: PHP Production Image
-FROM php:8.2-apache
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    libzip-dev \
-    zip \
-    unzip \
-    libfreetype6-dev \
-    libjpeg62-turbo-dev \
-    libwebp-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install PHP extensions required by Laravel
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install \
-    pdo_mysql \
-    mbstring \
-    exif \
-    pcntl \
-    bcmath \
-    gd \
-    zip \
-    opcache
-
-# Install Redis extension (optional but recommended for Laravel)
-RUN pecl install redis && docker-php-ext-enable redis
-
-# Install Composer
+# Install npm (use Node.js 20.x from Alpine repos)
+RUN npm install -g npm@latest
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Enable Apache modules
-RUN a2enmod rewrite headers
+# Set up app directory
+WORKDIR /app
 
-# Configure Apache for Laravel
-RUN sed -ri -e 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!/var/www/html/public!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+# Copy composer files and install dependencies
+COPY composer.* ./
+RUN composer install --no-interaction --prefer-dist --no-scripts --no-dev --no-autoloader
 
-# Set working directory
-WORKDIR /var/www/html
+# Copy package files for npm
+COPY package*.json ./
 
-# Copy composer files first for better caching
-COPY composer.json composer.lock ./
+# Install npm dependencies
+RUN if [ -f "package.json" ]; then \
+        npm install; \
+    fi
 
-# Install PHP dependencies (production only)
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
-
-# Copy application files
+# Copy application code
 COPY . .
 
-# Copy built assets from node-builder stage
-COPY --from=node-builder /app/public/build ./public/build
+# Build frontend assets
+RUN if [ -f "package.json" ]; then \
+        npm run build || echo 'Frontend build failed, continuing anyway'; \
+    fi
 
-# Generate optimized autoload files
+# Finish composer installation
 RUN composer dump-autoload --optimize --no-dev
 
-# Set proper permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html \
-    && chmod -R 775 /var/www/html/storage \
-    && chmod -R 775 /var/www/html/bootstrap/cache
+# Stage 2: Create the production image
+FROM php:8.2-alpine
 
-# Create necessary directories if they don't exist
-RUN mkdir -p storage/framework/cache/data \
-    storage/framework/sessions \
-    storage/framework/views \
-    storage/logs \
-    bootstrap/cache
+# Set environment variables for production
+ENV PHP_MEMORY_LIMIT=256M \
+    UPLOAD_MAX_FILESIZE=128M \
+    POST_MAX_SIZE=128M \
+    CONTAINER_ROLE=app \
+    APP_ENV=production \
+    PORT=8000 \
+    PSYSH_HISTORY_FILE=/dev/null \
+    PSYSH_CONFIG_FILE=/dev/null \
+    PSYSH_MANUAL_DB_FILE=/dev/null
 
-# Configure PHP for production
-RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+# Install required PHP extensions
+COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
+COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
 
-# Add custom PHP configuration
-RUN echo "upload_max_filesize = 20M" >> "$PHP_INI_DIR/conf.d/uploads.ini" \
-    && echo "post_max_size = 20M" >> "$PHP_INI_DIR/conf.d/uploads.ini" \
-    && echo "memory_limit = 256M" >> "$PHP_INI_DIR/conf.d/memory.ini" \
-    && echo "opcache.enable=1" >> "$PHP_INI_DIR/conf.d/opcache.ini" \
-    && echo "opcache.memory_consumption=128" >> "$PHP_INI_DIR/conf.d/opcache.ini" \
-    && echo "opcache.interned_strings_buffer=8" >> "$PHP_INI_DIR/conf.d/opcache.ini" \
-    && echo "opcache.max_accelerated_files=10000" >> "$PHP_INI_DIR/conf.d/opcache.ini" \
-    && echo "opcache.revalidate_freq=2" >> "$PHP_INI_DIR/conf.d/opcache.ini" \
-    && echo "opcache.fast_shutdown=1" >> "$PHP_INI_DIR/conf.d/opcache.ini"
+# Install minimal required packages including PostgreSQL runtime libraries
+RUN apk --no-cache add \
+        libmemcached-libs \
+        zlib \
+        libzip \
+        libpng \
+        libsodium \
+        jpeg \
+        freetype \
+        libwebp \
+        icu \
+        bash \
+        supervisor \
+        libpq \
+        curl && \
+    # Configure PHP
+    echo "memory_limit=${PHP_MEMORY_LIMIT}" > /usr/local/etc/php/conf.d/memory-limit.ini && \
+    echo "upload_max_filesize=${UPLOAD_MAX_FILESIZE}" > /usr/local/etc/php/conf.d/uploads.ini && \
+    echo "post_max_size=${POST_MAX_SIZE}" >> /usr/local/etc/php/conf.d/uploads.ini
 
-# Expose port 80
-EXPOSE 80
+# Copy application from builder stage
+WORKDIR /app
+COPY --from=builder /app /app
+
+# Create all necessary directories
+RUN mkdir -p /app/storage/app/public && \
+    mkdir -p /app/storage/app/private/App/Models/Patient/946 && \
+    mkdir -p /app/storage/app/private/App/Models/ReferrerOrder && \
+    mkdir -p /app/storage/framework/cache/data && \
+    mkdir -p /app/storage/framework/sessions && \
+    mkdir -p /app/storage/framework/views && \
+    mkdir -p /app/storage/logs && \
+    mkdir -p /app/bootstrap/cache && \
+    chmod -R 777 /app/storage && \
+    chmod -R 777 /app/bootstrap/cache
+
+# Set up supervisor and entrypoint
+COPY docker/supervisord/supervisord.conf /etc/supervisor.d/supervisord.ini
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint
+RUN chmod +x /usr/local/bin/entrypoint
+
+# Expose Laravel's built-in server port
+EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
 
-# Start Apache in foreground
-CMD ["apache2-foreground"]
+# Set entrypoint and default command
+ENTRYPOINT ["entrypoint"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
