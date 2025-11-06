@@ -20,7 +20,9 @@ class CollectRequestOperationService
 {
     public function __construct(
         private readonly CollectRequestRepositoryInterface $collectRequestRepository
-    ) {}
+    )
+    {
+    }
 
     public function getAssignedRequests(int $userId, array $filters = [])
     {
@@ -169,6 +171,8 @@ class CollectRequestOperationService
 
             // Get MAC address from D1
             $macAddress = $worksheet->getCell('D1')->getValue();
+            if (!$macAddress)
+                $macAddress = $worksheet->getCell('B1')->getValue();
 
             // Clean up MAC address if it has "MAC address()" prefix
             if (preg_match('/MAC address\((.*?)\)/', $macAddress, $matches)) {
@@ -195,7 +199,7 @@ class CollectRequestOperationService
                     if (is_numeric($datetime)) {
                         $datetime = Date::excelToDateTimeObject($datetime);
                     } else {
-                        $datetime = new DateTime($datetime,new DateTimeZone("Asia/Muscat"));
+                        $datetime = new DateTime($datetime, new DateTimeZone("Asia/Muscat"));
                     }
                     TemperatureLog::create([
                         'device_id' => $device->id,
