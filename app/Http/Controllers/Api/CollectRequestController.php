@@ -78,7 +78,9 @@ class CollectRequestController extends Controller
             $macAddress = $worksheet->getCell('D1')->getValue();
 
             if (!$macAddress) {
-                throw new Exception('MAC address not found in cell D1');
+                $macAddress = $worksheet->getCell('B1')->getValue();
+                if (!$macAddress)
+                    throw new Exception('MAC address not found in cell D1');
             }
 
             // Find or create device
@@ -87,7 +89,7 @@ class CollectRequestController extends Controller
             // Parse temperature data (starting from row 2, skip header)
             $highestRow = $worksheet->getHighestRow();
 
-            for ($row = 2; $row <= $highestRow; $row++) {
+            for ($row = 3; $row <= $highestRow; $row++) {
                 $datetime = $worksheet->getCell('A' . $row)->getValue();
                 $value = $worksheet->getCell('B' . $row)->getValue();
 
