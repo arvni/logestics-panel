@@ -6,8 +6,18 @@ import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme';
+import axios from 'axios';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Logistics Panel';
+
+// Configure axios for Inertia
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+
+// Get CSRF token
+const token = document.head.querySelector('meta[name="csrf-token"]');
+if (token) {
+    axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
+}
 
 // Force clear old service workers and caches - VERSION 1.0.1
 // This will run once to clear old cached API responses

@@ -74,6 +74,11 @@ export default defineConfig({
                         },
                     },
                     {
+                        // Never cache auth routes (logout, login, etc) - always use network only
+                        urlPattern: ({ url }) => url.pathname.match(/\/(logout|login|register|csrf-token)/),
+                        handler: 'NetworkOnly',
+                    },
+                    {
                         // Never cache API routes - always use network only to ensure CSRF tokens work
                         urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
                         handler: 'NetworkOnly',
@@ -84,7 +89,7 @@ export default defineConfig({
                     },
                 ],
                 // Don't cache anything that contains these patterns
-                navigateFallbackDenylist: [/^\/api\//],
+                navigateFallbackDenylist: [/^\/api\//, /\/(logout|login|register)/],
             },
         }),
     ],

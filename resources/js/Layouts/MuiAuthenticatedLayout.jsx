@@ -59,7 +59,25 @@ export default function MuiAuthenticatedLayout({ children, title }) {
     }, []);
 
     const handleLogout = useCallback(() => {
-        router.post(route('logout'));
+        router.post(route('logout'), {}, {
+            preserveState: false,
+            preserveScroll: false,
+            onError: (errors) => {
+                console.error('Logout error:', errors);
+                // Force logout even if there's an error
+                window.location.href = '/login';
+            },
+            onFinish: () => {
+                // Clear any cached data
+                if ('caches' in window) {
+                    caches.keys().then(names => {
+                        names.forEach(name => {
+                            caches.delete(name);
+                        });
+                    });
+                }
+            }
+        });
     }, []);
 
     const handleNavigation = useCallback((routeName) => {
