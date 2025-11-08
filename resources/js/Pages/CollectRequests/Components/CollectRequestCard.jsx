@@ -17,7 +17,7 @@ import {
     Directions as DirectionsIcon,
 } from '@mui/icons-material';
 
-export default function CollectRequestCard({ request, onSelectForCollection, onStartCollection }) {
+export default function CollectRequestCard({ request, onSelectForCollection, onStartCollection, onShowNotification }) {
     const theme = useTheme();
     const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -30,7 +30,9 @@ export default function CollectRequestCard({ request, onSelectForCollection, onS
             const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
             window.open(googleMapsUrl, '_blank');
         } else {
-            alert('Location information is not available for this referrer');
+            if (onShowNotification) {
+                onShowNotification('Location information is not available for this referrer', 'warning');
+            }
         }
     };
 

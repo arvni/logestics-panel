@@ -24,6 +24,7 @@ import {
     useTheme,
     Drawer,
     TextField,
+    Snackbar,
 } from '@mui/material';
 import {
     Stop as StopIcon,
@@ -87,6 +88,13 @@ export default function Index({auth}) {
     const [barcodes, setBarcodes] = useState([]);
     const [uploadFile, setUploadFile] = useState(null);
 
+    // Snackbar state
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'success', // 'success' | 'error' | 'warning' | 'info'
+    });
+
     // Pagination and filters
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -118,6 +126,14 @@ export default function Index({auth}) {
         }
     };
 
+    const showSnackbar = (message, severity = 'success') => {
+        setSnackbar({ open: true, message, severity });
+    };
+
+    const handleCloseSnackbar = () => {
+        setSnackbar({ ...snackbar, open: false });
+    };
+
     const fetchCollectRequests = async () => {
         setLoading(true);
         try {
@@ -137,7 +153,7 @@ export default function Index({auth}) {
             setTotalPages(response.data.last_page);
         } catch (error) {
             console.error('Error fetching collect requests:', error);
-            alert('Failed to fetch collect requests');
+            showSnackbar('Failed to fetch collect requests', 'error');
         } finally {
             setLoading(false);
         }
@@ -160,7 +176,7 @@ export default function Index({auth}) {
     const handleCloseStartDialog = () => {
         setStartDialogOpen(false);
         setSelectedRequest(null);
-        setBarcodes([]);
+        setBarcodes(['']); // Reset to initial state with one empty barcode
     };
 
     const getUserLocation = () => {
@@ -205,12 +221,12 @@ export default function Index({auth}) {
                 }
             });
 
-            alert('Request selected successfully. You can now start the collection.');
+            showSnackbar('Request selected successfully. You can now start the collection.', 'success');
             fetchCollectRequests();
         } catch (error) {
             console.error('Error selecting collection:', error);
             const errorMsg = error.response?.data?.message || error.message || 'Failed to select collection';
-            alert(errorMsg);
+            showSnackbar(errorMsg, 'error');
         }
     };
 
@@ -219,7 +235,7 @@ export default function Index({auth}) {
         const validBarcodes = barcodes.filter(barcode => barcode.trim() !== '');
 
         if (validBarcodes.length === 0) {
-            alert('Please enter or scan at least one barcode');
+            showSnackbar('Please enter or scan at least one barcode', 'warning');
             return;
         }
 
@@ -246,29 +262,30 @@ export default function Index({auth}) {
             });
 
             handleCloseStartDialog();
+            showSnackbar('Collection started successfully', 'success');
             fetchCollectRequests();
         } catch (error) {
             console.error('Error starting collection:', error);
             const errorMsg = error.response?.data?.message || error.message || 'Failed to start collection';
-            alert(errorMsg);
+            showSnackbar(errorMsg, 'error');
         }
     };
 
     const handleEndCollection = async () => {
         if (!uploadFile) {
-            alert('Please select a file to upload');
+            showSnackbar('Please select a file to upload', 'warning');
             return;
         }
 
         const validExtensions = ['xlsx', 'xls', 'csv'];
         const fileExtension = uploadFile.name?.split('.').pop().toLowerCase();
         if (!fileExtension || !validExtensions.includes(fileExtension)) {
-            alert('Please select a valid file type (.xlsx, .xls, or .csv)');
+            showSnackbar('Please select a valid file type (.xlsx, .xls, or .csv)', 'warning');
             return;
         }
 
         if (selectedRequests.length === 0) {
-            alert('Please select at least one request to end');
+            showSnackbar('Please select at least one request to end', 'warning');
             return;
         }
 
@@ -303,11 +320,12 @@ export default function Index({auth}) {
             setEndDialogOpen(false);
             setSelectedRequests([]);
             setUploadFile(null);
+            showSnackbar('Collection ended successfully', 'success');
             fetchCollectRequests();
         } catch (error) {
             console.error('Error ending collection:', error);
             const errorMsg = error.response?.data?.message || error.message || 'Failed to end collection';
-            alert(errorMsg);
+            showSnackbar(errorMsg, 'error');
         }
     };
 
@@ -322,10 +340,16 @@ export default function Index({auth}) {
             (req) => req.status === 'picked_up'
         );
         if (startedRequests.length === 0) {
-            alert('No started collections to end');
+            showSnackbar('No started collections to end', 'info');
             return;
         }
         setEndDialogOpen(true);
+    };
+
+    const handleCloseEndDialog = () => {
+        setEndDialogOpen(false);
+        setSelectedRequests([]);
+        setUploadFile(null);
     };
 
     const inProgressRequests = collectRequests.filter((req) => req.status === 'picked_up');
@@ -504,6 +528,7 @@ export default function Index({auth}) {
                                         request={request}
                                         onSelectForCollection={handleSelectForCollection}
                                         onStartCollection={handleOpenStartDialog}
+                                        onShowNotification={showSnackbar}
                                     />
                                 </Grid>
                             ))}
@@ -537,7 +562,7 @@ export default function Index({auth}) {
                 {/* End Collection Dialog */}
                 <EndCollectionDialog
                     open={endDialogOpen}
-                    onClose={() => setEndDialogOpen(false)}
+                    onClose={handleCloseEndDialog}
                     collectRequests={collectRequests}
                     selectedRequests={selectedRequests}
                     onToggleRequest={toggleRequestSelection}
@@ -545,6 +570,23 @@ export default function Index({auth}) {
                     onFileChange={setUploadFile}
                     onEndCollection={handleEndCollection}
                 />
+
+                {/* Snackbar for notifications */}
+                <Snackbar
+                    open={snackbar.open}
+                    autoHideDuration={6000}
+                    onClose={handleCloseSnackbar}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                >
+                    <Alert
+                        onClose={handleCloseSnackbar}
+                        severity={snackbar.severity}
+                        variant="filled"
+                        sx={{ width: '100%' }}
+                    >
+                        {snackbar.message}
+                    </Alert>
+                </Snackbar>
             </Container>
         </MuiAuthenticatedLayout>
     );

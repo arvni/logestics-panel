@@ -3,6 +3,7 @@
 namespace App\Application\Operator;
 
 use App\Domain\CollectRequest\CollectRequestRepositoryInterface;
+use App\Enums\CollectRequestStatus;
 use App\Events\CollectRequestUpdated;
 use App\Models\CollectRequest;
 use App\Models\Device;
@@ -180,7 +181,7 @@ class CollectRequestOperationService
         $updateData = [
             'barcodes' => array_merge($request->barcodes ?? [], $data['barcodes'] ?? []),
             'started_at' => now(),
-            'status' => 'picked_up',
+            'status' => CollectRequestStatus::PICKED_UP,
         ];
 
         // Only add extra_information if there's data to save
@@ -303,7 +304,7 @@ class CollectRequestOperationService
                 $updateData = [
                     'device_id' => $device->id,
                     'ended_at' => now(),
-                    'status' => 'received',
+                    'status' => CollectRequestStatus::RECEIVED,
                 ];
 
                 // Prepare extra_information
