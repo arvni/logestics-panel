@@ -22,7 +22,8 @@ export default function EndCollectionDialog({
     onFileChange,
     onEndCollection,
 }) {
-    const inProgressRequests = collectRequests.filter((req) => req.started_at && !req.ended_at);
+    // Filter requests with status 'picked_up' (started but not ended)
+    const inProgressRequests = collectRequests.filter((req) => req.status === 'picked_up');
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>

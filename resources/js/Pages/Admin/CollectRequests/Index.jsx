@@ -163,6 +163,20 @@ export default function Index({ auth }) {
     };
 
     const getStatusChip = (request) => {
+        // Use status field for display
+        if (request.status === 'received') {
+            return <Chip label="Received" color="success" size="small" />;
+        } else if (request.status === 'picked_up') {
+            return <Chip label="Picked Up" color="info" size="small" />;
+        } else if (request.status === 'sample_collector_on_the_way') {
+            return <Chip label="On The Way" color="primary" size="small" />;
+        } else if (request.status === 'waiting_for_assign') {
+            return <Chip label="Waiting for Assignment" color="warning" size="small" />;
+        } else if (request.status === 'pending') {
+            return <Chip label="Pending" color="default" size="small" />;
+        }
+
+        // Fallback to old logic for backwards compatibility
         if (request.ended_at) {
             return <Chip label="Completed" color="success" size="small" />;
         } else if (request.started_at) {

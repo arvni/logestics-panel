@@ -102,6 +102,47 @@ class CollectRequestOperationService
         ];
     }
 
+    /**
+     * Select a collect request for collection (changes status to sample_collector_on_the_way)
+     */
+    public function selectForCollection(int $userId, int $requestId): CollectRequest
+    {
+        $request = $this->collectRequestRepository->findById($requestId);
+
+        if (!$request) {
+            throw new Exception('Collect request not found');
+        }
+
+        if ($request->user_id !== $userId) {
+            throw new Exception('This request is not assigned to you');
+        }
+
+        // Check if status is pending or waiting_for_assign
+        if (!in_array($request->status?->value, ['pending', 'waiting_for_assign'])) {
+            throw new Exception('Can only select requests with pending or waiting_for_assign status');
+        }
+
+        // Check if operator already has an active collection (status = sample_collector_on_the_way)
+        $activeCollection = CollectRequest::where('user_id', $userId)
+            ->where('status', 'sample_collector_on_the_way')
+            ->where('id', '!=', $requestId)
+            ->first();
+
+        if ($activeCollection) {
+            throw new Exception('You already have an active collection. Please complete it before selecting another one.');
+        }
+
+        // Update status to sample_collector_on_the_way
+        $updatedRequest = $this->collectRequestRepository->update($requestId, [
+            'status' => 'sample_collector_on_the_way',
+        ]);
+
+        // Dispatch event to notify external server about the status change
+        event(new CollectRequestUpdated([$requestId], 'selected'));
+
+        return $updatedRequest;
+    }
+
     public function startCollection(int $userId, int $requestId, array $data): CollectRequest
     {
         $request = $this->collectRequestRepository->findById($requestId);
@@ -112,6 +153,11 @@ class CollectRequestOperationService
 
         if ($request->user_id !== $userId) {
             throw new Exception('This request is not assigned to you');
+        }
+
+        // Validate status is sample_collector_on_the_way
+        if ($request->status?->value !== 'sample_collector_on_the_way') {
+            throw new Exception('Can only start collection for requests with status "sample_collector_on_the_way"');
         }
 
         if ($request->started_at) {
@@ -134,6 +180,7 @@ class CollectRequestOperationService
         $updateData = [
             'barcodes' => array_merge($request->barcodes ?? [], $data['barcodes'] ?? []),
             'started_at' => now(),
+            'status' => 'picked_up',
         ];
 
         // Only add extra_information if there's data to save
@@ -256,6 +303,7 @@ class CollectRequestOperationService
                 $updateData = [
                     'device_id' => $device->id,
                     'ended_at' => now(),
+                    'status' => 'received',
                 ];
 
                 // Prepare extra_information

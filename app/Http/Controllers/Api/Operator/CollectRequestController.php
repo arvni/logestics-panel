@@ -33,6 +33,26 @@ class CollectRequestController extends Controller
         return response()->json($collectRequest);
     }
 
+    public function select(Request $request)
+    {
+        $validated = $request->validate([
+            'request_id' => 'required|exists:collect_requests,id',
+        ]);
+
+        try {
+            $collectRequest = $this->operationService->selectForCollection(
+                $request->user()->id,
+                $validated['request_id']
+            );
+
+            return response()->json($collectRequest);
+        } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
     public function start(Request $request)
     {
         $validated = $request->validate([

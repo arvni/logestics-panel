@@ -191,6 +191,29 @@ export default function Index({auth}) {
         });
     };
 
+    const handleSelectForCollection = async (request) => {
+        try {
+            // Fetch fresh CSRF token before making the request
+            const freshToken = await fetchFreshCsrfToken();
+
+            await axios.post('/api/operator/collect-requests/select', {
+                request_id: request.id,
+            }, {
+                headers: {
+                    'X-CSRF-TOKEN': freshToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+
+            alert('Request selected successfully. You can now start the collection.');
+            fetchCollectRequests();
+        } catch (error) {
+            console.error('Error selecting collection:', error);
+            const errorMsg = error.response?.data?.message || error.message || 'Failed to select collection';
+            alert(errorMsg);
+        }
+    };
+
     const handleStartCollection = async () => {
         // Filter out empty barcodes
         const validBarcodes = barcodes.filter(barcode => barcode.trim() !== '');
@@ -296,7 +319,7 @@ export default function Index({auth}) {
 
     const openEndDialog = () => {
         const startedRequests = collectRequests.filter(
-            (req) => req.started_at && !req.ended_at
+            (req) => req.status === 'picked_up'
         );
         if (startedRequests.length === 0) {
             alert('No started collections to end');
@@ -305,7 +328,7 @@ export default function Index({auth}) {
         setEndDialogOpen(true);
     };
 
-    const inProgressRequests = collectRequests.filter((req) => req.started_at && !req.ended_at);
+    const inProgressRequests = collectRequests.filter((req) => req.status === 'picked_up');
 
     const FiltersContent = () => (
         <Box sx={{p: isMobile ? 2 : 3}}>
@@ -479,6 +502,7 @@ export default function Index({auth}) {
                                 <Grid item xs={12} md={6} key={request.id}>
                                     <CollectRequestCard
                                         request={request}
+                                        onSelectForCollection={handleSelectForCollection}
                                         onStartCollection={handleOpenStartDialog}
                                     />
                                 </Grid>

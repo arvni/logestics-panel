@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CollectRequestStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -27,6 +28,7 @@ class CollectRequest extends Model
         'extra_information' => 'array',
         'started_at' => 'datetime',
         'ended_at' => 'datetime',
+        'status' => CollectRequestStatus::class,
     ];
 
     public function user(): BelongsTo

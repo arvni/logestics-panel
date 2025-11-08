@@ -8,9 +8,10 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
 
 /**
- * Event fired when collect requests are updated (started or ended)
+ * Event fired when collect requests are updated (selected, started, or ended)
  *
  * This event is dispatched when:
+ * - A collect request is selected for collection by an operator
  * - A single collect request is started by an operator
  * - Multiple collect requests are ended by an operator
  */
@@ -19,13 +20,13 @@ class CollectRequestUpdated
     use Dispatchable, SerializesModels;
 
     public Collection $collectRequests;
-    public string $action; // 'started' or 'ended'
+    public string $action; // 'selected', 'started', or 'ended'
 
     /**
      * Create a new event instance.
      *
      * @param array $collectRequestsId Array of collect request IDs
-     * @param string $action The action performed: 'started' or 'ended'
+     * @param string $action The action performed: 'selected', 'started', or 'ended'
      */
     public function __construct(
         array  $collectRequestsId,

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
  * Listener that notifies the external server when collect requests are updated
  *
  * This listener sends authenticated API requests to the external server when:
+ * - A collect request is selected for collection (single request)
  * - A collect request is started (single request)
  * - Collect requests are ended (multiple requests)
  */
@@ -38,7 +39,7 @@ class NotifyServerOfCollectRequestUpdate implements ShouldQueue
     public function handle(CollectRequestUpdated $event): void
     {
         $collectRequests = $event->collectRequests;
-        $action = $event->action; // 'started' or 'ended'
+        $action = $event->action; // 'selected', 'started', or 'ended'
 
         // Check if API is configured
         if (empty(config('api.server_url'))) {

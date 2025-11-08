@@ -13,13 +13,42 @@ import {
 import {
     PlayArrow as StartIcon,
     Visibility as ViewIcon,
+    CheckCircle as SelectIcon,
+    Directions as DirectionsIcon,
 } from '@mui/icons-material';
 
-export default function CollectRequestCard({ request, onStartCollection }) {
+export default function CollectRequestCard({ request, onSelectForCollection, onStartCollection }) {
     const theme = useTheme();
     const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+    const handleGetDirections = () => {
+        if (request.referrer && request.referrer.latitude && request.referrer.longitude) {
+            const lat = request.referrer.latitude;
+            const lng = request.referrer.longitude;
+
+            // Try to open in Google Maps app on mobile, otherwise open in browser
+            const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+            window.open(googleMapsUrl, '_blank');
+        } else {
+            alert('Location information is not available for this referrer');
+        }
+    };
+
     const getStatusChip = (request) => {
+        // Use status field for display
+        if (request.status === 'received') {
+            return <Chip label="Received" color="success" size="small" />;
+        } else if (request.status === 'picked_up') {
+            return <Chip label="Picked Up" color="info" size="small" />;
+        } else if (request.status === 'sample_collector_on_the_way') {
+            return <Chip label="On The Way" color="primary" size="small" />;
+        } else if (request.status === 'waiting_for_assign') {
+            return <Chip label="Waiting for Assignment" color="warning" size="small" />;
+        } else if (request.status === 'pending') {
+            return <Chip label="Pending" color="default" size="small" />;
+        }
+
+        // Fallback to old logic for backwards compatibility
         if (request.ended_at) {
             return <Chip label="Completed" color="success" size="small" />;
         } else if (request.started_at) {
@@ -134,18 +163,48 @@ export default function CollectRequestCard({ request, onStartCollection }) {
                     )}
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                        {!request.started_at && (
+                        {/* Show Select button for pending or waiting_for_assign status */}
+                        {(request.status === 'pending' || request.status === 'waiting_for_assign') && (
                             <Button
                                 variant="contained"
+                                color="primary"
                                 size={isSmallMobile ? 'small' : 'medium'}
-                                startIcon={<StartIcon />}
-                                onClick={() => onStartCollection(request)}
+                                startIcon={<SelectIcon />}
+                                onClick={() => onSelectForCollection(request)}
                                 fullWidth
                             >
-                                Start Collection
+                                Select for Collection
                             </Button>
                         )}
-                        {request.ended_at && (
+
+                        {/* Show Direction and Start buttons for sample_collector_on_the_way status */}
+                        {request.status === 'sample_collector_on_the_way' && (
+                            <>
+                                <Button
+                                    variant="outlined"
+                                    color="info"
+                                    size={isSmallMobile ? 'small' : 'medium'}
+                                    startIcon={<DirectionsIcon />}
+                                    onClick={handleGetDirections}
+                                    fullWidth
+                                >
+                                    Get Directions
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    size={isSmallMobile ? 'small' : 'medium'}
+                                    startIcon={<StartIcon />}
+                                    onClick={() => onStartCollection(request)}
+                                    fullWidth
+                                >
+                                    Start Collection
+                                </Button>
+                            </>
+                        )}
+
+                        {/* Show View Details for completed requests */}
+                        {request.status === 'received' && (
                             <Button
                                 variant="outlined"
                                 size={isSmallMobile ? 'small' : 'medium'}
