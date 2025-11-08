@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Reader\Csv;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class CollectRequestOperationService
 {
@@ -160,8 +161,19 @@ class CollectRequestOperationService
             // Parse the file
             // Set up PhpSpreadsheet for CSV
             $reader = new Csv();
-            $reader->setDelimiter(','); // Ensure comma delimiter
-            $reader->setInputEncoding('UTF-8'); // Specify encoding
+
+            // Detect encoding and set appropriate delimiter
+            $fileContent = file_get_contents($uploadedFile->getRealPath());
+            $isUtf16 = (substr($fileContent, 0, 2) === "\xFF\xFE" || substr($fileContent, 0, 2) === "\xFE\xFF");
+
+            if ($isUtf16) {
+                $reader->setInputEncoding('UTF-16LE');
+                $reader->setDelimiter("\t"); // UTF-16 files typically use tab delimiter
+            } else {
+                $reader->setInputEncoding('UTF-8');
+                $reader->setDelimiter(','); // Default comma delimiter
+            }
+
             $spreadsheet = $reader->load($uploadedFile->getRealPath());
             $worksheet = $spreadsheet->getActiveSheet();
 
@@ -170,29 +182,49 @@ class CollectRequestOperationService
             Log::info('First row cells:', $firstRow);
 
             // Get MAC address from D1
-            $macAddress = $worksheet->getCell('D1')->getValue();
-            if (!$macAddress)
-                $macAddress = $worksheet->getCell('B1')->getValue();
-
-            // Clean up MAC address if it has "MAC address()" prefix
-            if (preg_match('/MAC address\((.*?)\)/', $macAddress, $matches)) {
-                $macAddress = $matches[1]; // Extract 49:24:06:18:06:AD
-            }
-
-            // Validate MAC address format
-            if (!preg_match('/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/', $macAddress)) {
-                throw new Exception('MAC address not found in cell D1');
-            }
+            $macAddress = $this->getMacAddress($worksheet);
 
             // Find or create device
             $device = Device::firstOrCreate(['mac' => $macAddress]);
 
-            // Parse temperature data (starting from row 2, skip header)
+            // Parse temperature data
             $highestRow = $worksheet->getHighestRow();
+            $highestColumn = $worksheet->getHighestColumn();
 
-            for ($row = 2; $row <= $highestRow; $row++) {
-                $datetime = $worksheet->getCell('A' . $row)->getValue();
-                $value = $worksheet->getCell('B' . $row)->getValue();
+            // Determine header row (skip MAC address row if present)
+            $headerRow = 1;
+            $firstRowValue = $worksheet->getCell('A1')->getValue();
+            if ($firstRowValue && preg_match('/MAC\s*Address/i', $firstRowValue)) {
+                $headerRow = 2; // MAC address is in row 1, header is in row 2
+            }
+
+            // Check if we have only one column with data (column A or B is empty)
+            $dataStartRow = $headerRow + 1;
+            $isSingleColumn = $highestColumn === 'A' || empty($worksheet->getCell('B' . $dataStartRow)->getValue());
+
+            // Start parsing from the row after header
+            for ($row = $dataStartRow; $row <= $highestRow; $row++) {
+                $datetime = null;
+                $value = null;
+
+                if ($isSingleColumn) {
+                    // Single column format: "2025-11-06 00:00:00	7.98"
+                    $cellValue = $worksheet->getCell('A' . $row)->getValue();
+
+                    if ($cellValue) {
+                        // Split by tab or multiple spaces
+                        $parts = preg_split('/[\t\s]{2,}/', $cellValue, 2);
+
+                        if (count($parts) === 2) {
+                            $datetime = trim($parts[0]);
+                            $value = trim($parts[1]);
+                        }
+                    }
+                } else {
+                    // Two column format: datetime in A, value in B
+                    $datetime = $worksheet->getCell('A' . $row)->getValue();
+                    $value = $worksheet->getCell('B' . $row)->getValue();
+                }
 
                 if ($datetime && $value !== null && $value !== '') {
                     // Convert Excel date to PHP DateTime if needed
@@ -203,7 +235,7 @@ class CollectRequestOperationService
                     }
                     TemperatureLog::create([
                         'device_id' => $device->id,
-                        'value' => $value,
+                        'value' => (float)$value,
                         'timestamp' => $datetime->getTimestamp(),
                     ]);
                 }
@@ -267,7 +299,7 @@ class CollectRequestOperationService
             return [
                 'success' => true,
                 'device' => $device,
-                'temperature_logs_count' => $highestRow - 1,
+                'temperature_logs_count' => $highestRow - $dataStartRow + 1,
             ];
 
         } catch (Exception $e) {
@@ -280,5 +312,70 @@ class CollectRequestOperationService
 
             throw $e;
         }
+    }
+
+    /**
+     * @input Worksheet $worksheet
+     * @output
+     * @throws Exception
+     */
+    private function getMacAddress(Worksheet $worksheet): string
+    {
+        // First, check row 1 for "MAC Address" format
+        $firstRowValue = $worksheet->getCell('A1')->getValue();
+        if ($firstRowValue && preg_match('/MAC\s*Address[\s:]*([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})/i', $firstRowValue, $matches)) {
+            return $matches[0];
+        }
+
+        // If not found in A1, search in the first few rows
+        $highestColumn = $worksheet->getHighestColumn();
+        $dataArray = $worksheet->rangeToArray(
+            'A1:' . $highestColumn . '1',
+            null,
+            true,
+            false,
+            false
+        );
+
+        // Flatten the 2D array
+        $flatArray = array_merge(...$dataArray);
+
+        // Use array_reduce to find first matching MAC address
+        $macAddress = array_reduce($flatArray, function ($carry, $value) {
+            // If already found, return it
+            if ($carry !== null) {
+                return $carry;
+            }
+
+            if (empty($value)) {
+                return null;
+            }
+
+            // Check for "MAC address: XX:XX:XX:XX:XX:XX" or "MAC Address	XX:XX:XX:XX:XX:XX" format
+            if (preg_match('/MAC\s*Address[\s:]*([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})/i', $value, $matches)) {
+                // Extract just the MAC address part
+                if (preg_match('/([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})/', $matches[0], $macMatches)) {
+                    return $macMatches[0];
+                }
+            }
+
+            // Check for "MAC address()" format
+            if (preg_match('/MAC address\((.*?)\)/', $value, $matches)) {
+                return $matches[1];
+            }
+
+            // Check for plain MAC address format
+            if (preg_match('/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/', $value)) {
+                return $value;
+            }
+
+            return null;
+        }, null);
+
+        if (!$macAddress) {
+            throw new Exception('No MAC address found in worksheet');
+        }
+
+        return $macAddress;
     }
 }
