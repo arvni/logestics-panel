@@ -17,11 +17,6 @@ class Referrer extends Model
         'longitude',
     ];
 
-    protected $casts = [
-        'latitude' => 'decimal:8',
-        'longitude' => 'decimal:8',
-    ];
-
     public function collectRequests(): HasMany
     {
         return $this->hasMany(CollectRequest::class);

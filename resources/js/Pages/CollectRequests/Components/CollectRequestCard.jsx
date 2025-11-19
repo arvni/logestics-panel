@@ -15,9 +15,10 @@ import {
     Visibility as ViewIcon,
     CheckCircle as SelectIcon,
     Directions as DirectionsIcon,
+    Cancel as CancelIcon,
 } from '@mui/icons-material';
 
-export default function CollectRequestCard({ request, onSelectForCollection, onStartCollection, onShowNotification }) {
+export default function CollectRequestCard({ request, onSelectForCollection, onCancelSelection, onStartCollection, onShowNotification }) {
     const theme = useTheme();
     const isSmallMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -179,7 +180,7 @@ export default function CollectRequestCard({ request, onSelectForCollection, onS
                             </Button>
                         )}
 
-                        {/* Show Direction and Start buttons for sample_collector_on_the_way status */}
+                        {/* Show Direction, Start, and Cancel buttons for sample_collector_on_the_way status */}
                         {request.status === 'sample_collector_on_the_way' && (
                             <>
                                 <Button
@@ -201,6 +202,16 @@ export default function CollectRequestCard({ request, onSelectForCollection, onS
                                     fullWidth
                                 >
                                     Start Collection
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    color="error"
+                                    size={isSmallMobile ? 'small' : 'medium'}
+                                    startIcon={<CancelIcon />}
+                                    onClick={() => onCancelSelection(request)}
+                                    fullWidth
+                                >
+                                    Cancel Selection
                                 </Button>
                             </>
                         )}

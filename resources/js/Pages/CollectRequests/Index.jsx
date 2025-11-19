@@ -230,6 +230,29 @@ export default function Index({auth}) {
         }
     };
 
+    const handleCancelSelection = async (request) => {
+        try {
+            // Fetch fresh CSRF token before making the request
+            const freshToken = await fetchFreshCsrfToken();
+
+            await axios.post('/api/operator/collect-requests/cancel', {
+                request_id: request.id,
+            }, {
+                headers: {
+                    'X-CSRF-TOKEN': freshToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+
+            showSnackbar('Selection cancelled successfully. Request status changed to pending.', 'success');
+            fetchCollectRequests();
+        } catch (error) {
+            console.error('Error cancelling selection:', error);
+            const errorMsg = error.response?.data?.message || error.message || 'Failed to cancel selection';
+            showSnackbar(errorMsg, 'error');
+        }
+    };
+
     const handleStartCollection = async () => {
         // Filter out empty barcodes
         const validBarcodes = barcodes.filter(barcode => barcode.trim() !== '');
@@ -527,6 +550,7 @@ export default function Index({auth}) {
                                     <CollectRequestCard
                                         request={request}
                                         onSelectForCollection={handleSelectForCollection}
+                                        onCancelSelection={handleCancelSelection}
                                         onStartCollection={handleOpenStartDialog}
                                         onShowNotification={showSnackbar}
                                     />

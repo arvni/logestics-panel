@@ -25,7 +25,7 @@ class WebhookController extends Controller
     {
         $validated = $request->validate([
             'id' => 'required|integer',
-            'action' => 'required|string|in:create,update,delete',
+            'action' => 'required|string|in:create,update,delete,assign',
             'status' => 'nullable|string',
             'sample_collector' => 'required|array',
             'sample_collector.id' => 'required|integer',
@@ -73,7 +73,7 @@ class WebhookController extends Controller
         // Check if collect request already exists based on server_id
         $collectRequest = CollectRequest::where('server_id', $validated['id'])->first();
 
-        if (($validated['action'] === 'create' || $validated['action'] === 'update') && !$collectRequest) {
+        if (($validated['action'] === 'create' || $validated['action'] === 'update' || $validated['action'] === 'assign') && !$collectRequest) {
             // Create new collect request
             $collectRequest = CollectRequest::create([
                 'user_id' => $user->id,

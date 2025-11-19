@@ -144,6 +144,37 @@ class CollectRequestOperationService
         return $updatedRequest;
     }
 
+    /**
+     * Cancel a selected collection request (changes status back to pending)
+     */
+    public function cancelSelection(int $userId, int $requestId): CollectRequest
+    {
+        $request = $this->collectRequestRepository->findById($requestId);
+
+        if (!$request) {
+            throw new Exception('Collect request not found');
+        }
+
+        if ($request->user_id !== $userId) {
+            throw new Exception('This request is not assigned to you');
+        }
+
+        // Check if status is sample_collector_on_the_way
+        if ($request->status?->value !== 'sample_collector_on_the_way') {
+            throw new Exception('Can only cancel requests with status "sample_collector_on_the_way"');
+        }
+
+        // Update status back to pending
+        $updatedRequest = $this->collectRequestRepository->update($requestId, [
+            'status' => 'pending',
+        ]);
+
+        // Dispatch event to notify external server about the status change
+        event(new CollectRequestUpdated([$requestId], 'cancelled'));
+
+        return $updatedRequest;
+    }
+
     public function startCollection(int $userId, int $requestId, array $data): CollectRequest
     {
         $request = $this->collectRequestRepository->findById($requestId);

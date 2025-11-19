@@ -84,6 +84,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/collect-requests', [OperatorCollectRequestController::class, 'index']);
             Route::get('/collect-requests/{id}', [OperatorCollectRequestController::class, 'show']);
             Route::post('/collect-requests/select', [OperatorCollectRequestController::class, 'select']);
+            Route::post('/collect-requests/cancel', [OperatorCollectRequestController::class, 'cancelSelection']);
             Route::post('/collect-requests/start', [OperatorCollectRequestController::class, 'start']);
             Route::post('/collect-requests/end', [OperatorCollectRequestController::class, 'end']);
             Route::get('/referrers', [AdminReferrerController::class, 'index']);
